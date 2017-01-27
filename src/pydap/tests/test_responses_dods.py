@@ -160,19 +160,20 @@ class TestDODSResponseSequence(unittest.TestCase):
         """Test response body."""
         dds, xdrdata = self.res.body.split(b'\nData:\n', 1)
         dds = dds.decode('ascii')
-        self.assertEqual(dds, """Dataset {
-    Sequence {
-        String id;
-        Int32 lon;
-    } cast;
-} SimpleSequence;""")
+        self.assertEqual(dds,
+                         'Dataset {\n'
+                         '    Sequence {\n'
+                         '        String id;\n'
+                         '        Int32 lon;\n'
+                         '    } cast;\n'
+                         '} SimpleSequence;')
 
         self.assertEqual(
             xdrdata,
             START_OF_SEQUENCE +
             b"\x00\x00\x00\x01"   # length of the string (=1)
             b"1\x00\x00\x00"      # string zero-paddded to 4 bytes
-            b"\x00\x00\x00d" +  # lon
+            b"\x00\x00\x00d" +    # lon
             START_OF_SEQUENCE +
             b"\x00\x00\x00\x01"
             b"2\x00\x00\x00"
@@ -193,11 +194,12 @@ class TestDODSResponseArray(unittest.TestCase):
         res = self.app.get("/.dods")
         dds, xdrdata = res.body.split(b'\nData:\n', 1)
         dds = dds.decode('ascii')
-        self.assertEqual(dds, """Dataset {
-    Byte byte[byte = 5];
-    String string[string = 2];
-    Int16 short;
-} SimpleArray;""")
+        self.assertEqual(dds,
+                         'Dataset {\n'
+                         '    Byte byte[byte = 5];\n'
+                         '    String string[string = 2];\n'
+                         '    Int16 short;\n'
+                         '} SimpleArray;')
 
         self.assertEqual(
             xdrdata,

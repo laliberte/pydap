@@ -6,7 +6,7 @@ from six.moves.urllib.parse import quote as quote_
 from six.moves import reduce, zip_longest
 from six import binary_type, MAXSIZE
 
-from pydap.exceptions import ConstraintExpressionError
+from .exceptions import ConstraintExpressionError
 
 
 __dap__ = '2.15'
@@ -16,6 +16,7 @@ __version__ = get_distribution("Pydap").version
 START_OF_SEQUENCE = b'\x5a\x00\x00\x00'
 END_OF_SEQUENCE = b'\xa5\x00\x00\x00'
 STRING = '|S128'
+DEFAULT_TIMEOUT = 120  # 120s
 
 
 def quote(name):
@@ -187,3 +188,15 @@ def decode_np_strings(numpy_var):
         return numpy_var.tostring().decode('utf-8')
     else:
         return numpy_var
+
+
+def load_from_entry_point_relative(r, subpackage):
+    try:
+        loaded = getattr(__import__(r.module_name
+                                    .replace(subpackage + '.', '', 1),
+                                    globals(), None, [r.attrs[0]], 1),
+                         r.attrs[0])
+        return r.name, loaded
+    except ImportError:
+        # This is only used in handlers testing:
+        return r.name, r.load()

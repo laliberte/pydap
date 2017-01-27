@@ -83,6 +83,10 @@ class TestESGF(unittest.TestCase):
         res = pydap.net.follow_redirect(self.test_url, session=session)
         assert(res.status_code == 200)
 
+        # This server does not access retrieval of grid coordinates.
+        # The option output_grid disables this, reverting to
+        # pydap 3.1.1 behavior. For older OPeNDAP servers (i.e. ESGF),
+        # this appears necessary.
         dataset = open_url(self.url, session=session, output_grid=False)
         data = dataset['orog'][50:55, 50:55]
         expected_data = [[197.70425, 16.319595, 0.0, 0.0, 0.0],

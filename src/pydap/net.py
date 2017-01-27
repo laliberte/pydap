@@ -1,3 +1,7 @@
+from .lib import DEFAULT_TIMEOUT
+import sys
+import warnings
+
 from webob.request import Request
 from webob.exc import HTTPError
 from contextlib import closing
@@ -5,7 +9,8 @@ from contextlib import closing
 from six.moves.urllib.parse import urlsplit, urlunsplit
 
 
-def GET(url, application=None, session=None):
+def GET(url, application=None, session=None,
+        timeout=DEFAULT_TIMEOUT):
     """Open a remote URL returning a webob.response.Response object
 
     Optional parameters:
@@ -18,19 +23,21 @@ def GET(url, application=None, session=None):
         _, _, path, query, fragment = urlsplit(url)
         url = urlunsplit(('', '', path, query, fragment))
 
-    return follow_redirect(url, application=application, session=session)
+    return follow_redirect(url, application=application, session=session,
+                           timeout=timeout)
 
 
 def raise_for_status(response):
     if response.status_code >= 400:
         raise HTTPError(
-            detail=response.status,
+            detail=response.status+'\n'+response.text,
             headers=response.headers,
             comment=response.body
         )
 
 
 def follow_redirect(url, application=None, session=None,
+                    timeout=DEFAULT_TIMEOUT,
                     cookies_dict=None):
     """
     This function essentially performs the following command:
@@ -59,4 +66,10 @@ def follow_redirect(url, application=None, session=None,
         # Use session to follow redirects:
         req = Request.blank(url)
 
+    if (timeout != DEFAULT_TIMEOUT and
+       sys.version_info < (2, 7)):
+        warnings.warn('Currently pydap does not support '
+                      'user-specified timeouts in python 2.6',
+                      DeprecationWarning)
+    req.environ['webob.client.timeout'] = timeout
     return req.get_response(application)

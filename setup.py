@@ -30,14 +30,22 @@ cas_extras = [
     'requests'
     ]
 
-tests_require = functions_extras + cas_extras + [
-    'WebTest',
-    'beautifulsoup4',
+hdl_netcdf_extras = [
     'scipy',
-    'flake8'
-]
+    'netCDF4',
+    'ordereddict'
+    ]
+
+tests_require = (functions_extras + cas_extras +
+                 hdl_netcdf_extras +
+                 ['WebTest',
+                  'beautifulsoup4',
+                  'scipy',
+                  'werkzeug',
+                  'flake8'])
 
 testing_extras = tests_require + [
+    'flake8',
     'nose',
     'coverage',
     'requests'
@@ -68,14 +76,16 @@ setup(name='Pydap',
       include_package_data=True,
       zip_safe=False,
       namespace_packages=["pydap", "pydap.responses",
-                          "pydap.handlers", "pydap.tests"],
+                          "pydap.handlers", "pydap.tests",
+                          'pydap.apis'],
       install_requires=install_requires,
       extras_require={
             'functions': functions_extras,
             'testing': testing_extras,
             'docs': docs_extras,
             'tests': tests_require,
-            'cas': cas_extras
+            'cas': cas_extras,
+            'handlers.netcdf': hdl_netcdf_extras
       },
       test_suite="pydap.tests",
       entry_points="""
