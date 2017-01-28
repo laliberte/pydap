@@ -107,9 +107,9 @@ class Dataset(object):
             # First try without authentication
             self._assign_dataset()
         except HTTPError as e:
-            if str(e).startswith('40'):
+            if _maybe_auth_error(str(e)):
                 # If first try and
-                # 400 type error. Try to authenticate:
+                # 300 or 400 type error. Try to authenticate:
                 try:
                     self._assign_dataset(authenticate=True)
                 except HTTPError as e:
@@ -259,7 +259,10 @@ class Dataset(object):
         var_id = np.argmax([len(dataset[varname].dimensions)
                             for varname in var_list])
         base_dimensions_list = dataset[var_list[var_id]].dimensions
-        base_dimensions_lengths = dataset[var_list[var_id]].array.shape
+        try:
+            base_dimensions_lengths = dataset[var_list[var_id]].array.shape
+        except AttributeError:
+            base_dimensions_lengths = dataset[var_list[var_id]].shape
 
         for varname in var_list:
             if not (set(base_dimensions_list)
@@ -460,6 +463,19 @@ def _tostr(s):
     except Exception:  # pragma: no cover
         ss = s
     return ss
+
+
+def _maybe_auth_error(message):
+    if len(message) < 3:
+        return False
+    try:
+        code = int(message[:3])
+    except TypeError:
+        return False
+    if 300 <= code < 500:
+        return True
+    else:
+        return False
 
 
 def _getitem_safe(dataset, key):
