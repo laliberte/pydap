@@ -70,7 +70,7 @@ def create_request(url, session=None):
     if session is not None:
         try:
             # Use session to follow redirects:
-            with closing(session.head(url)) as head:
+            with closing(session.head(url, allow_redirects=True)) as head:
                 req = Request.blank(head.url)
 
                 # Get cookies from head:

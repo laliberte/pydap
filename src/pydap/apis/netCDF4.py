@@ -358,7 +358,7 @@ class Variable(object):
             return _getitem_safe(self, key)
         except HTTPError as e:
             # Before raising error, try to authenticate:
-            if str(e).startswith('40'):
+            if _maybe_auth_error(str(e)):
                 try:
                     self._grp._assign_dataset(authenticate=True)
                     return _getitem_safe(self, key)
