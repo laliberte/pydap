@@ -261,7 +261,8 @@ class Dataset(object):
         base_dimensions_list = dataset[var_list[var_id]].dimensions
         try:
             base_dimensions_lengths = dataset[var_list[var_id]].array.shape
-        except AttributeError:
+        except (AttributeError, KeyError):
+            # KeyError is important for python 3.3 and 3.4
             base_dimensions_lengths = dataset[var_list[var_id]].shape
 
         for varname in var_list:
@@ -481,8 +482,9 @@ def _maybe_auth_error(message):
 def _getitem_safe(dataset, key):
     try:
         return dataset._var.array.__getitem__(key)
-    except (AttributeError, ServerError,
-            HTTPError):
+    except (AttributeError, KeyError,
+            ServerError, HTTPError):
+        # KeyError is important for python 3.3 and 3.4
         if (isinstance(key, slice) and
            key == slice(None, None, None)):
             # A single dimension ellipsis was requested.
