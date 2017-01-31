@@ -271,8 +271,11 @@ class Dataset(object):
                 for dim_id, dim in enumerate(dataset[varname].dimensions):
                     if dim not in base_dimensions_list:
                         base_dimensions_list += (dim,)
-                        base_dimensions_lengths += (dataset[varname]
-                                                    .shape[dim_id],)
+                        try:
+                            dim_length = dataset[varname].array.shape[dim_id]
+                        except AttributeError:
+                            dim_length = dataset[varname].shape[dim_id]
+                        base_dimensions_lengths += (dim_length, )
         dimensions_dict = OrderedDict()
         for dim, dim_length in zip(base_dimensions_list,
                                    base_dimensions_lengths):

@@ -34,6 +34,18 @@ def _message(e):
         return str(e.exception)
 
 
+def _compare_repr(a, b):  # pragma: no cover
+    import difflib
+    print('{} => {}'.format(a,b))  
+    for i,s in enumerate(difflib.ndiff(a, b)):
+        if s[0]==' ': continue
+        elif s[0]=='-':
+            print(u'Delete "{}" from position {}'.format(s[-1],i))
+        elif s[0]=='+':
+            print(u'Add "{}" to position {}'.format(s[-1],i))    
+    print()    
+
+
 class TestDataset(unittest.TestCase):
 
     """Test that the handler creates the correct dataset from a URL."""
@@ -51,17 +63,22 @@ class TestDataset(unittest.TestCase):
         os.close(fileno)
         with netCDF4.Dataset(self.test_file, 'w') as output:
             output.createDimension('index', None)
-            temp = output.createVariable('index', '<i4', ('index',))
+            for dim in ['lat', 'lon']:
+                output.createDimension(dim, 1)
+                output.createVariable(dim, 'f', (dim,))
+            dim_tuple = ('index', 'lat', 'lon')
+            temp = output.createVariable('index', '<i4', dim_tuple)
             split_data = zip(*self.data)
             temp[:] = next(split_data)
-            temp = output.createVariable('temperature', '<f8', ('index',))
+            temp = output.createVariable('temperature', '<f8', dim_tuple)
             temp[:] = next(split_data)
-            temp = output.createVariable('station', 'S40', ('index',))
+            temp = output.createVariable('station', 'S40', dim_tuple)
             temp.setncattr('long_name', 'Station Name')
             for item_id, item in enumerate(next(split_data)):
-                temp[item_id] = item
-            output.createDimension('tag', 1)
-            temp = output.createVariable('tag', '<i4', ('tag',))
+                temp[item_id, 0, 0] = item
+            output.createDimension('bnds', 1)
+            temp = output.createVariable('bnds', '<i4', ('bnds',))
+            output.createVariable('index_bnds', '<f8', ('index', 'bnds'))
             output.setncattr('history', 'test file for netCDF4 api')
         self.app = ServerSideFunctions(NetCDFHandler(self.test_file))
 
@@ -72,9 +89,9 @@ class TestDataset(unittest.TestCase):
                  ('station', 'S40')]
         with Dataset('http://localhost:8000/',
                      application=self.app) as dataset:
-            retrieved_data = list(zip(dataset['index'][:],
-                                      dataset['temperature'][:],
-                                      dataset['station'][:]))
+            retrieved_data = list(zip(np.squeeze(dataset['index'][:]),
+                                      np.squeeze(dataset['temperature'][:]),
+                                      np.squeeze(dataset['station'][:])))
         np.testing.assert_array_equal(np.array(retrieved_data, dtype=dtype),
                                       np.array(self.data, dtype=dtype))
 
@@ -183,12 +200,13 @@ class TestDataset(unittest.TestCase):
         expected_repr = """<class 'pydap.apis.netCDF4.Dataset'>
 root group (pyDAP data model, file format DAP2):
     history: test file for netCDF4 api
-    dimensions(sizes): index(4), tag(1)
-    variables(dimensions): >i4 \033[4mindex\033[0m(index), |S100 \033[4mstation\033[0m(index), >i4 \033[4mtag\033[0m(tag), >f8 \033[4mtemperature\033[0m(index)
+    dimensions(sizes): index(4), lat(1), lon(1), bnds(1)
+    variables(dimensions): >i4 \033[4mbnds\033[0m(bnds), >i4 \033[4mindex\033[0m(), >f8 \033[4mindex_bnds\033[0m(index,bnds), >f4 \033[4mlat\033[0m(lat), >f4 \033[4mlon\033[0m(lon), |S100 \033[4mstation\033[0m(index,lat,lon), >f8 \033[4mtemperature\033[0m(index,lat,lon)
     groups: 
 """
         with Dataset('http://localhost:8000/',
                      application=self.app) as dataset:
+            # _compare_repr(repr(dataset), expected_repr)
             assert repr(dataset) == expected_repr
             dataset.path = 'test/'
             expected_repr = '\n'.join(
@@ -335,14 +353,15 @@ root group (pyDAP data model, file format DAP2):
 
     def test_variable_repr(self):
         expected_repr = """<class 'pydap.apis.netCDF4.Variable'>
-|S100 station(index)
+|S100 station(index, lat, lon)
     long_name: Station Name
 unlimited dimensions: 
-current shape = (4,)
+current shape = (4, 1, 1)
 """
         with Dataset('http://localhost:8000/',
                      application=self.app) as dataset:
             variable = dataset.variables['station']
+            #_compare_repr(expected_repr, repr(variable))
             assert repr(variable) == expected_repr
 
             # Mock unlimited dimension:
