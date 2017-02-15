@@ -118,9 +118,17 @@ class Dataset(object):
                 raise ServerError(str(e))
         except (SSLError, requests.exceptions.SSLError):
             try:
-                self._assign_dataset(authenticate=True)
-            except (SSLError, requests.exceptions.SSLError):
-                self._assign_dataset(authenticate=True, verify=False)
+                self._assign_dataset(verify=False)
+            except HTTPError as e:
+                if _maybe_auth_error(str(e)):
+                    # If first try and
+                    # 300 or 400 type error. Try to authenticate:
+                    try:
+                        self._assign_dataset(authenticate=True, verify=False)
+                    except HTTPError as e:
+                        raise ServerError(str(e))
+                else:
+                    raise ServerError(str(e))
 
         self.dimensions = self._get_dims(self._pydap_dataset)
         self.variables = self._get_vars(self._pydap_dataset)
@@ -372,13 +380,19 @@ class Variable(object):
                 raise ServerError(str(e))
         except (SSLError, requests.exceptions.SSLError):
             try:
-                self._grp._assign_dataset(authenticate=True)
-            except (SSLError, requests.exceptions.SSLError):
-                self._grp._assign_dataset(authenticate=True, verify=False)
-            try:
+                self._grp._assign_dataset(verify=False)
                 return _getitem_safe(self, key)
             except HTTPError as e:
-                raise ServerError(str(e))
+                # Before raising error, try to authenticate:
+                if _maybe_auth_error(str(e)):
+                    try:
+                        self._grp._assign_dataset(authenticate=True,
+                                                  verify=False)
+                        return _getitem_safe(self, key)
+                    except HTTPError as e:
+                        raise ServerError(str(e))
+                else:
+                    raise ServerError(str(e))
 
     def __len__(self):
         if not self.shape:

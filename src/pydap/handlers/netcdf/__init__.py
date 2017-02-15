@@ -65,7 +65,7 @@ class NetCDFHandler(BaseHandler):
                                            attributes=dict(
                                                       NC_GLOBAL=attrs(source)))
                 for dim in dims:
-                    if dims[dim] is None:
+                    if dims[dim].isunlimited():
                         self.dataset.attributes['DODS_EXTRA'] = {
                             'Unlimited_Dimension': dim,
                         }

@@ -99,5 +99,14 @@ class TestNetCDFHandlerServer(unittest.TestCase):
         np.testing.assert_array_equal(np.array(retrieved_data, dtype=dtype),
                                       np.array(self.data, dtype=dtype))
 
+    def test_unlimited(self):
+        handler = NetCDFHandler(self.test_file)
+        application = ServerSideFunctions(handler)
+        dataset = DAPHandler("http://localhost:8001/", application).dataset
+        assert 'DODS_EXTRA' in dataset.attributes
+        assert 'Unlimited_Dimension' in dataset.attributes['DODS_EXTRA']
+        assert (dataset
+                .attributes['DODS_EXTRA']['Unlimited_Dimension']) == 'index'
+
     def tearDown(self):
         os.remove(self.test_file)
