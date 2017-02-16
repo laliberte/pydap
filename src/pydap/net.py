@@ -69,8 +69,11 @@ def follow_redirect(url, application=None, session=None,
     else:
         # Here, we use monkeypatching. Webob does not provide a way
         # to bypass SSL verification.
+        # This approach is never ideal but it appears to be the only option
+        # here.
         _create_default_https_context = ssl._create_default_https_context
         _create_unverified_https_context = ssl._create_unverified_context
+        ssl._create_default_https_context = _create_unverified_https_context
         try:
             resp = req.get_response(application)
         finally:

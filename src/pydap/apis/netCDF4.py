@@ -136,7 +136,7 @@ class Dataset(object):
         self.groups = OrderedDict()
 
     def _assign_dataset(self, authenticate=False, verify=True):
-        combined_verify = min(self._verify, verify) 
+        combined_verify = min(self._verify, verify)
         if authenticate:
             self._session = get_cookies.setup_session(self._authentication_uri,
                                                       username=self._username,

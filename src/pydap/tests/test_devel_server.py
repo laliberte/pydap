@@ -115,6 +115,7 @@ class TestCSVserver(unittest.TestCase):
                     warnings.simplefilter('ignore')
                     open_url(url, verify=False, session=requests.Session())
             except (ssl.SSLError, requests.exceptions.SSLError):
+                raise
                 self.fail("Should not raise SSLError")
 
             with self.assertRaises(ssl.SSLError):
