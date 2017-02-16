@@ -110,19 +110,25 @@ class TestCSVserver(unittest.TestCase):
                              ssl_context='adhoc') as server:
             url = ("https://0.0.0.0:%s/" % server.port +
                    os.path.basename(self.test_file))
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore')
-                    open_url(url, verify=False, session=requests.Session())
-            except (ssl.SSLError, requests.exceptions.SSLError):
-                if not (sys.version_info >= (3, 0) and
-                        sys.version_info < (3, 4, 4)):
-                    self.fail("SSLError should not be raised.")
+            if (sys.version_info >= (3, 0) and
+               sys.version_info < (3, 5)):
+                # verify option does not work for python 3.3 and 3.4:
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore')
+                        open_url(url, verify=False, session=requests.Session())
+                except (ssl.SSLError, requests.exceptions.SSLError):
+                        self.fail("SSLError should not be raised.")
 
-            with self.assertRaises(ssl.SSLError):
-                open_url(url, verify=True)
-            with self.assertRaises(requests.exceptions.SSLError):
-                open_url(url, verify=True, session=requests.Session())
+                with self.assertRaises(requests.exceptions.SSLError):
+                    open_url(url, verify=True, session=requests.Session())
+            else:
+                try:
+                    open_url(url, verify=False, session=requests.Session())
+                except (ssl.SSLError, requests.exceptions.SSLError):
+                        self.fail("SSLError should not be raised.")
+                with self.assertRaises(requests.exceptions.SSLError):
+                    open_url(url, verify=True, session=requests.Session())
 
     def tearDown(self):
         # Remove test file:
