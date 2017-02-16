@@ -5,6 +5,7 @@ from webob.request import Request
 from webob.exc import HTTPError
 from contextlib import closing
 import ssl
+import warnings
 
 from six.moves.urllib.parse import urlsplit, urlunsplit
 
@@ -78,7 +79,7 @@ def follow_redirect(url, application=None, session=None,
             ssl._create_default_https_context = _create_unverified_ctx
         except AttributeError:
             _create_default_https_ctx = None
-            warnings.warn('verify=False does not work for python 3.3 and 3.4') 
+            warnings.warn('verify=False does not work for python 3.3 and 3.4')
         try:
             resp = req.get_response(application)
         finally:
