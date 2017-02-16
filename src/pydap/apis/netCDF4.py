@@ -136,18 +136,19 @@ class Dataset(object):
         self.groups = OrderedDict()
 
     def _assign_dataset(self, authenticate=False, verify=True):
+        combined_verify = min(self._verify, verify) 
         if authenticate:
             self._session = get_cookies.setup_session(self._authentication_uri,
                                                       username=self._username,
                                                       password=self._password,
                                                       session=self._session,
-                                                      verify=min(self._verify,
-                                                                 verify),
+                                                      verify=combined_verify,
                                                       check_url=self._url)
 
         self._pydap_dataset = open_url(self._url, session=self._session,
                                        timeout=self._timeout,
                                        application=self._application,
+                                       verify=combined_verify,
                                        output_grid=self._output_grid)
 
     def __enter__(self):
