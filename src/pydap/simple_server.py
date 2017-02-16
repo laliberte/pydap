@@ -1,13 +1,15 @@
-from webob.request import Request
 import threading
 import time
+import requests
+import warnings
 
 from werkzeug.serving import run_simple
 from .handlers.csv import CSVHandler
 from .wsgi.ssf import ServerSideFunctions
 
 
-def run_simple_server(test_file, port=8000, handler=CSVHandler):
+def run_simple_server(test_file, port=8000, handler=CSVHandler,
+                      ssl_context=None):
     application = handler(test_file)
     application = ServerSideFunctions(application)
 
@@ -19,7 +21,8 @@ def run_simple_server(test_file, port=8000, handler=CSVHandler):
             return application(environ, start_response)
 
     run_simple('0.0.0.0', port,
-               app_check_for_shutdown)
+               app_check_for_shutdown,
+               ssl_context=ssl_context)
 
 
 def shutdown_server(environ):
@@ -54,11 +57,13 @@ class LocalTestServer:
 
     def __init__(self, file_name, port=8000,
                  handler=CSVHandler,
+                 ssl_context=None,
                  wait=1):
         self.file_name = file_name
         self._port = port
         self.handler = handler
         self._wait = wait
+        self.ssl_context = ssl_context
 
     def connect(self):
         # Start a simple WSGI server:
@@ -66,7 +71,8 @@ class LocalTestServer:
                                .Thread(target=run_simple_server,
                                        args=(self.file_name,
                                              self.port,
-                                             self.handler)))
+                                             self.handler,
+                                             self.ssl_context)))
         self.server_process.start()
         # Wait a little while for the server to start:
         time.sleep(self._wait)
@@ -81,9 +87,12 @@ class LocalTestServer:
 
     def disconnect(self):
         # Shutdown the server:
-        (Request
-         .blank("http://0.0.0.0:%s/shutdown" % self.port)
-         .get_response())
+        url = "http://0.0.0.0:%s/shutdown"
+        if self.ssl_context is not None:
+            url = url.replace('http', 'https')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            requests.head(url % self.port, verify=False)
         time.sleep(self._wait)
         self.server_process.join()
         del(self.server_process)

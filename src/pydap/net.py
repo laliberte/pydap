@@ -4,12 +4,13 @@ from requests.exceptions import MissingSchema
 from webob.request import Request
 from webob.exc import HTTPError
 from contextlib import closing
+import ssl
 
 from six.moves.urllib.parse import urlsplit, urlunsplit
 
 
 def GET(url, application=None, session=None,
-        timeout=DEFAULT_TIMEOUT):
+        timeout=DEFAULT_TIMEOUT, verify=True):
     """Open a remote URL returning a webob.response.Response object
 
     Optional parameters:
@@ -23,7 +24,7 @@ def GET(url, application=None, session=None,
         url = urlunsplit(('', '', path, query, fragment))
 
     return follow_redirect(url, application=application, session=session,
-                           timeout=timeout)
+                           timeout=timeout, verify=verify)
 
 
 def raise_for_status(response):
@@ -53,7 +54,7 @@ def raise_for_status(response):
 
 
 def follow_redirect(url, application=None, session=None,
-                    timeout=DEFAULT_TIMEOUT):
+                    timeout=DEFAULT_TIMEOUT, verify=True):
     """
     This function essentially performs the following command:
     >>> Request.blank(url).get_response(application)
@@ -61,16 +62,29 @@ def follow_redirect(url, application=None, session=None,
     It however makes sure that the request possesses the same cookies and
     headers as the passed session.
     """
-    req = create_request(url, session=session)
+    req = create_request(url, session=session, verify=verify)
     req.environ['webob.client.timeout'] = timeout
-    return req.get_response(application)
+    if verify:
+        return req.get_response(application)
+    else:
+        # Here, we use monkeypatching. Webob does not provide a way
+        # to bypass SSL verification.
+        _create_default_https_context = ssl._create_default_https_context
+        _create_unverified_https_context = ssl._create_unverified_context
+        try:
+            resp = req.get_response(application)
+        finally:
+            # Restore verified context
+            ssl._create_default_https_context = _create_default_https_context
+        return resp
 
 
-def create_request(url, session=None):
+def create_request(url, session=None, verify=True):
     if session is not None:
         try:
             # Use session to follow redirects:
-            with closing(session.head(url, allow_redirects=True)) as head:
+            with closing(session.head(url, allow_redirects=True,
+                                      verify=verify)) as head:
                 req = Request.blank(head.url)
 
                 # Get cookies from head:

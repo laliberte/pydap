@@ -14,6 +14,8 @@ import os
 import numpy as np
 from nose.plugins.attrib import attr
 import warnings
+import requests
+import ssl
 
 from pydap.handlers.csv import CSVHandler
 from webob.exc import HTTPError
@@ -101,6 +103,24 @@ class TestCSVserver(unittest.TestCase):
                         open_url(url, timeout=1e-8)
                     except DeprecationWarning:
                         raise HTTPError
+
+    def test_verify_open_url(self):
+        """Test that timeout on open_url  raises the correct HTTPError"""
+        with LocalTestServer(self.test_file, handler=CSVHandler,
+                             ssl_context='adhoc') as server:
+            url = ("https://0.0.0.0:%s/" % server.port +
+                   os.path.basename(self.test_file))
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    open_url(url, verify=False, session=requests.Session())
+            except (ssl.SSLError, requests.exceptions.SSLError):
+                self.fail("Should not raise SSLError")
+
+            with self.assertRaises(ssl.SSLError):
+                open_url(url, verify=True)
+            with self.assertRaises(requests.exceptions.SSLError):
+                open_url(url, verify=True, session=requests.Session())
 
     def tearDown(self):
         # Remove test file:
