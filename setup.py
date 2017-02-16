@@ -42,6 +42,7 @@ tests_require = (functions_extras + cas_extras +
                   'beautifulsoup4',
                   'scipy',
                   'werkzeug',
+                  'pyopenssl',
                   'flake8'])
 
 testing_extras = tests_require + [
