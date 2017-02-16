@@ -168,7 +168,8 @@ class TestDataset(unittest.TestCase):
                                     HTTPError('500 Test Error')])
 
         with Dataset('http://localhost:8000/',
-                     application=self.app) as dataset:
+                     application=self.app,
+                     verify=False) as dataset:
             variable = dataset.variables['temperature']
             variable._var.array.__getitem__ = mock_sslerror
             variable._var.__getitem__ = mock_sslerror
@@ -182,7 +183,8 @@ class TestDataset(unittest.TestCase):
         mock_assignerror = MockErrors([SSLError('SSL dataset Error')])
 
         with Dataset('http://localhost:8000/',
-                     application=self.app) as dataset:
+                     application=self.app,
+                     verify=False) as dataset:
             dataset._assign_dataset = mock_assignerror
             variable = dataset.variables['temperature']
             variable._var.array.__getitem__ = mock_sslerror

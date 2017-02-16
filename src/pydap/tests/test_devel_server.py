@@ -121,14 +121,18 @@ class TestCSVserver(unittest.TestCase):
                         self.fail("SSLError should not be raised.")
 
                 with self.assertRaises(requests.exceptions.SSLError):
-                    open_url(url, verify=True, session=requests.Session())
+                    open_url(url, session=requests.Session())
+                with self.assertRaises(ssl.SSLError):
+                    open_url(url)
             else:
                 try:
-                    open_url(url, verify=False, session=requests.Session())
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore')
+                        open_url(url, verify=False, session=requests.Session())
                 except (ssl.SSLError, requests.exceptions.SSLError):
                         self.fail("SSLError should not be raised.")
                 with self.assertRaises(requests.exceptions.SSLError):
-                    open_url(url, verify=True, session=requests.Session())
+                    open_url(url, session=requests.Session())
 
     def tearDown(self):
         # Remove test file:

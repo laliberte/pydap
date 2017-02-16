@@ -5,7 +5,6 @@ from webob.request import Request
 from webob.exc import HTTPError
 from contextlib import closing
 import ssl
-import warnings
 
 from six.moves.urllib.parse import urlsplit, urlunsplit
 

@@ -16,14 +16,20 @@ import requests
 
 from collections import OrderedDict
 
-from ..exceptions import ServerError
 from webob.exc import HTTPError
 from ssl import SSLError
+from requests.packages.urllib3.exceptions import (InsecureRequestWarning,
+                                                  InsecurePlatformWarning)
+import warnings
+from ..exceptions import ServerError
 from ..client import open_url
 from ..lib import DEFAULT_TIMEOUT
 from ..cas import get_cookies
 
 default_encoding = 'utf-8'
+
+ssl_verify_categories = [InsecureRequestWarning,
+                         InsecurePlatformWarning]
 
 _private_atts = ['_grpid', '_grp', '_varid', 'groups', 'dimensions',
                  'variables', 'dtype', 'data_model', 'disk_format',
@@ -102,7 +108,10 @@ class Dataset(object):
         self.keepweakref = False
 
         # Assign dataset, allowing for
-        # inadequate authentication:
+        # inadequate authentication.
+        # First, always attempt a verified
+        # query. If verify=False, then
+        # attempt and unverified query.
         try:
             # First try without authentication
             self._assign_dataset()
@@ -117,18 +126,23 @@ class Dataset(object):
             else:
                 raise ServerError(str(e))
         except (SSLError, requests.exceptions.SSLError):
-            try:
-                self._assign_dataset(verify=False)
-            except HTTPError as e:
-                if _maybe_auth_error(str(e)):
-                    # If first try and
-                    # 300 or 400 type error. Try to authenticate:
-                    try:
-                        self._assign_dataset(authenticate=True, verify=False)
-                    except HTTPError as e:
+            if self._verify:
+                raise
+            else:
+                # Attempt unverified query:
+                try:
+                    self._assign_dataset(verify=False)
+                except HTTPError as e:
+                    if _maybe_auth_error(str(e)):
+                        # If first try and
+                        # 300 or 400 type error. Try to authenticate:
+                        try:
+                            self._assign_dataset(authenticate=True,
+                                                 verify=False)
+                        except HTTPError as e:
+                            raise ServerError(str(e))
+                    else:
                         raise ServerError(str(e))
-                else:
-                    raise ServerError(str(e))
 
         self.dimensions = self._get_dims(self._pydap_dataset)
         self.variables = self._get_vars(self._pydap_dataset)
@@ -136,20 +150,31 @@ class Dataset(object):
         self.groups = OrderedDict()
 
     def _assign_dataset(self, authenticate=False, verify=True):
-        combined_verify = min(self._verify, verify)
         if authenticate:
             self._session = get_cookies.setup_session(self._authentication_uri,
                                                       username=self._username,
                                                       password=self._password,
                                                       session=self._session,
-                                                      verify=combined_verify,
+                                                      verify=verify,
                                                       check_url=self._url)
 
-        self._pydap_dataset = open_url(self._url, session=self._session,
-                                       timeout=self._timeout,
-                                       application=self._application,
-                                       verify=combined_verify,
-                                       output_grid=self._output_grid)
+        with warnings.catch_warnings():
+            if not verify:
+                # Catch warnings. It is assumed that the
+                # user that explicitly uses verify=False
+                # is either fully aware of the risks
+                # or cannot avoid the risks because of
+                # an improperly configured server.
+                # This error will usually occur with
+                # ESGF authentication.
+                for category in ssl_verify_categories:
+                    warnings.filterwarnings("ignore",
+                                            category=category)
+            self._pydap_dataset = open_url(self._url, session=self._session,
+                                           timeout=self._timeout,
+                                           application=self._application,
+                                           verify=verify,
+                                           output_grid=self._output_grid)
 
     def __enter__(self):
         return self
@@ -295,12 +320,13 @@ class Dataset(object):
         return dimensions_dict
 
     def _get_vars(self, dataset):
-        return dict([(var, Variable(dataset[var], var, self))
+        return dict([(var, Variable(dataset[var], var, self,
+                                    verify=self._verify))
                      for var in dataset.keys()])
 
 
 class Variable(object):
-    def __init__(self, var, name, grp):
+    def __init__(self, var, name, grp, verify=True):
         self._grp = grp
         self._var = var
         self.dimensions = self._getdims()
@@ -310,6 +336,7 @@ class Variable(object):
         self.scale = True
         self.name = name
         self.size = np.prod(self.shape)
+        self._verify = verify
 
     @property
     def shape(self):
@@ -380,20 +407,23 @@ class Variable(object):
             else:
                 raise ServerError(str(e))
         except (SSLError, requests.exceptions.SSLError):
-            try:
-                self._grp._assign_dataset(verify=False)
-                return _getitem_safe(self, key)
-            except HTTPError as e:
-                # Before raising error, try to authenticate:
-                if _maybe_auth_error(str(e)):
-                    try:
-                        self._grp._assign_dataset(authenticate=True,
-                                                  verify=False)
-                        return _getitem_safe(self, key)
-                    except HTTPError as e:
+            if self._verify:
+                raise
+            else:
+                try:
+                    self._grp._assign_dataset(verify=False)
+                    return _getitem_safe(self, key)
+                except HTTPError as e:
+                    # Before raising error, try to authenticate:
+                    if _maybe_auth_error(str(e)):
+                        try:
+                            self._grp._assign_dataset(authenticate=True,
+                                                      verify=False)
+                            return _getitem_safe(self, key)
+                        except HTTPError as e:
+                            raise ServerError(str(e))
+                    else:
                         raise ServerError(str(e))
-                else:
-                    raise ServerError(str(e))
 
     def __len__(self):
         if not self.shape:
