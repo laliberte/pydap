@@ -72,14 +72,15 @@ def follow_redirect(url, application=None, session=None,
         # to bypass SSL verification.
         # This approach is never ideal but it appears to be the only option
         # here.
-        # This only works in python 2.7 and >=3.5
+        # This only works in python 2.7 and >=3.5. In python 3.3 and 3.4
+        # do not require it because by default contexts are not
+        # verified.
         try:
             _create_default_https_ctx = ssl._create_default_https_context
             _create_unverified_ctx = ssl._create_unverified_context
             ssl._create_default_https_context = _create_unverified_ctx
         except AttributeError:
             _create_default_https_ctx = None
-            warnings.warn('verify=False does not work for python 3.3 and 3.4')
         try:
             resp = req.get_response(application)
         finally:
