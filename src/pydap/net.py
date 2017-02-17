@@ -1,12 +1,19 @@
-from .lib import DEFAULT_TIMEOUT
 from requests.exceptions import MissingSchema
+from requests.packages.urllib3.exceptions import (InsecureRequestWarning,
+                                                  InsecurePlatformWarning)
 
 from webob.request import Request
 from webob.exc import HTTPError
 from contextlib import closing
 import ssl
+import warnings
 
 from six.moves.urllib.parse import urlsplit, urlunsplit
+
+from .lib import DEFAULT_TIMEOUT
+
+ssl_verify_categories = [InsecureRequestWarning,
+                         InsecurePlatformWarning]
 
 
 def GET(url, application=None, session=None,
@@ -64,8 +71,16 @@ def follow_redirect(url, application=None, session=None,
     """
     req = create_request(url, session=session, verify=verify)
     req.environ['webob.client.timeout'] = timeout
+    return get_response(req, application, verify=verify)
+
+
+def get_response(req, application, verify=True):
+    """
+    If verify=False, use the ssl library to temporarily disable
+    ssl verification.
+    """
     if verify:
-        return req.get_response(application)
+        resp = req.get_response(application)
     else:
         # Here, we use monkeypatching. Webob does not provide a way
         # to bypass SSL verification.
@@ -80,19 +95,38 @@ def follow_redirect(url, application=None, session=None,
             ssl._create_default_https_context = _create_unverified_ctx
         except AttributeError:
             _create_default_https_ctx = None
+
         try:
             resp = req.get_response(application)
         finally:
             if _create_default_https_ctx is not None:
                 # Restore verified context
                 ssl._create_default_https_context = _create_default_https_ctx
-        return resp
+    return resp
 
 
 def create_request(url, session=None, verify=True):
-    if session is not None:
+    """
+    By default, create a blank request. If session
+    is available, follow redirects.
+    """
+    if session is None:
+        return Request.blank(url)
+
+    # Use session to follow redirects:
+    with warnings.catch_warnings():
+        if not verify:
+            # Catch warnings. It is assumed that the
+            # user that explicitly uses verify=False
+            # is either fully aware of the risks
+            # or cannot avoid the risks because of
+            # an improperly configured server.
+            # This error will usually occur with
+            # ESGF authentication.
+            for category in ssl_verify_categories:
+                warnings.filterwarnings("ignore",
+                                        category=category)
         try:
-            # Use session to follow redirects:
             with closing(session.head(url, allow_redirects=True,
                                       verify=verify)) as head:
                 req = Request.blank(head.url)
@@ -112,5 +146,4 @@ def create_request(url, session=None, verify=True):
             # In testing, missing schema means that
             # a arbitrary url was used. Simply
             # pass
-            pass
-    return Request.blank(url)
+            return Request.blank(url)

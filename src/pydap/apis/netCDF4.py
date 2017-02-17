@@ -18,18 +18,12 @@ from collections import OrderedDict
 
 from webob.exc import HTTPError
 from ssl import SSLError
-from requests.packages.urllib3.exceptions import (InsecureRequestWarning,
-                                                  InsecurePlatformWarning)
-import warnings
 from ..exceptions import ServerError
 from ..client import open_url
 from ..lib import DEFAULT_TIMEOUT
 from ..cas import get_cookies
 
 default_encoding = 'utf-8'
-
-ssl_verify_categories = [InsecureRequestWarning,
-                         InsecurePlatformWarning]
 
 _private_atts = ['_grpid', '_grp', '_varid', 'groups', 'dimensions',
                  'variables', 'dtype', 'data_model', 'disk_format',
@@ -113,41 +107,32 @@ class Dataset(object):
         # query. If verify=False, then
         # attempt and unverified query.
         try:
-            # First try without authentication
-            self._assign_dataset()
-        except HTTPError as e:
-            if _maybe_auth_error(str(e)):
-                # If first try and
-                # 300 or 400 type error. Try to authenticate:
-                try:
-                    self._assign_dataset(authenticate=True)
-                except HTTPError as e:
-                    raise ServerError(str(e))
-            else:
-                raise ServerError(str(e))
+            self._assign_dataset_safely()
         except (SSLError, requests.exceptions.SSLError):
             if self._verify:
                 raise
             else:
-                # Attempt unverified query:
-                try:
-                    self._assign_dataset(verify=False)
-                except HTTPError as e:
-                    if _maybe_auth_error(str(e)):
-                        # If first try and
-                        # 300 or 400 type error. Try to authenticate:
-                        try:
-                            self._assign_dataset(authenticate=True,
-                                                 verify=False)
-                        except HTTPError as e:
-                            raise ServerError(str(e))
-                    else:
-                        raise ServerError(str(e))
+                self._assign_dataset_safely(verify=False)
 
         self.dimensions = self._get_dims(self._pydap_dataset)
         self.variables = self._get_vars(self._pydap_dataset)
 
         self.groups = OrderedDict()
+
+    def _assign_dataset_safely(self, verify=True):
+        try:
+            # First try without authentication
+            self._assign_dataset(verify=verify)
+        except HTTPError as e:
+            if _maybe_auth_error(str(e)):
+                # If first try and
+                # 300 or 400 type error. Try to authenticate:
+                try:
+                    self._assign_dataset(authenticate=True, verify=verify)
+                except HTTPError as e:
+                    raise ServerError(str(e))
+            else:
+                raise ServerError(str(e))
 
     def _assign_dataset(self, authenticate=False, verify=True):
         if authenticate:
@@ -158,23 +143,11 @@ class Dataset(object):
                                                       verify=verify,
                                                       check_url=self._url)
 
-        with warnings.catch_warnings():
-            if not verify:
-                # Catch warnings. It is assumed that the
-                # user that explicitly uses verify=False
-                # is either fully aware of the risks
-                # or cannot avoid the risks because of
-                # an improperly configured server.
-                # This error will usually occur with
-                # ESGF authentication.
-                for category in ssl_verify_categories:
-                    warnings.filterwarnings("ignore",
-                                            category=category)
-            self._pydap_dataset = open_url(self._url, session=self._session,
-                                           timeout=self._timeout,
-                                           application=self._application,
-                                           verify=verify,
-                                           output_grid=self._output_grid)
+        self._pydap_dataset = open_url(self._url, session=self._session,
+                                       timeout=self._timeout,
+                                       application=self._application,
+                                       verify=verify,
+                                       output_grid=self._output_grid)
 
     def __enter__(self):
         return self
@@ -320,23 +293,23 @@ class Dataset(object):
         return dimensions_dict
 
     def _get_vars(self, dataset):
-        return dict([(var, Variable(dataset[var], var, self,
-                                    verify=self._verify))
-                     for var in dataset.keys()])
+        return dict([(var_name, Variable(var_name, self,
+                                         verify=self._verify))
+                     for var_name in dataset.keys()])
 
 
 class Variable(object):
-    def __init__(self, var, name, grp, verify=True):
+    def __init__(self, name, grp, verify=True):
+        self.name = name
         self._grp = grp
-        self._var = var
-        self.dimensions = self._getdims()
+        self._verify = verify
+        self.scale = True
+
+        self.dimensions = self._grp._pydap_dataset[self.name].dimensions
+        self.ndim = len(self.dimensions)
 
         self.datatype = self.dtype
-        self.ndim = len(self.dimensions)
-        self.scale = True
-        self.name = name
         self.size = np.prod(self.shape)
-        self._verify = verify
 
     @property
     def shape(self):
@@ -367,11 +340,11 @@ class Variable(object):
         raise NotImplementedError('get_var_chunk_cache is not implemented')
 
     def ncattrs(self):
-        return self._var.attributes.keys()
+        return self._grp._pydap_dataset[self.name].attributes.keys()
 
     def getncattr(self, attr):
         try:
-            return self._var.attributes[attr]
+            return self._grp._pydap_dataset[self.name].attributes[attr]
         except KeyError as e:
             raise AttributeError(str(e))
 
@@ -379,7 +352,7 @@ class Variable(object):
         return self.getncattr(name)
 
     def getValue(self):
-        return self._var[...]
+        return self._grp._pydap_dataset[self.name][...]
 
     def group(self):
         return self._grp
@@ -394,36 +367,41 @@ class Variable(object):
             return six.text_type(self).encode(default_encoding)
 
     def __getitem__(self, key):
+        if (isinstance(key, slice) and
+           key == slice(None, None, None)):
+            key = Ellipsis
         try:
-            return _getitem_safe(self, key)
-        except HTTPError as e:
-            # Before raising error, try to authenticate:
-            if _maybe_auth_error(str(e)):
-                try:
-                    self._grp._assign_dataset(authenticate=True)
-                    return _getitem_safe(self, key)
-                except HTTPError as e:
-                    raise ServerError(str(e))
-            else:
-                raise ServerError(str(e))
+            return self._getitem_safely(key)
         except (SSLError, requests.exceptions.SSLError):
             if self._verify:
                 raise
             else:
+                return self._getitem_safely(key, verify=False)
+
+    def _getitem_safely(self, key, verify=True):
+        try:
+            if not verify:
+                # If not verify, we do not have to
+                # reassign. Simply attempt:
+                self._grp._assign_dataset(verify=verify)
+            return self._getitem_compatible(key)
+        except HTTPError as e:
+            # Before raising error, try to authenticate:
+            if _maybe_auth_error(str(e)):
                 try:
-                    self._grp._assign_dataset(verify=False)
-                    return _getitem_safe(self, key)
+                    self._grp._assign_dataset(authenticate=True,
+                                              verify=verify)
+                    return self._getitem_compatible(key)
                 except HTTPError as e:
-                    # Before raising error, try to authenticate:
-                    if _maybe_auth_error(str(e)):
-                        try:
-                            self._grp._assign_dataset(authenticate=True,
-                                                      verify=False)
-                            return _getitem_safe(self, key)
-                        except HTTPError as e:
-                            raise ServerError(str(e))
-                    else:
-                        raise ServerError(str(e))
+                    raise ServerError(str(e))
+            else:
+                raise ServerError(str(e))
+
+    def _getitem_compatible(self, key):
+        try:
+            return self._grp._pydap_dataset[self.name].array.__getitem__(key)
+        except (AttributeError, KeyError):
+            return self._grp._pydap_dataset[self.name].__getitem__(key)
 
     def __len__(self):
         if not self.shape:
@@ -461,14 +439,11 @@ class Variable(object):
         ncdump_var.append('current shape = %s\n' % repr(self.shape))
         return ''.join(ncdump_var)
 
-    def _getdims(self):
-        return self._var.dimensions
-
     def _get_array_att(self, att):
-        if hasattr(self._var, att):
-            return getattr(self._var, att)
+        if hasattr(self._grp._pydap_dataset[self.name], att):
+            return getattr(self._grp._pydap_dataset[self.name], att)
         else:
-            return getattr(self._var.array, att)
+            return getattr(self._grp._pydap_dataset[self.name].array, att)
 
 
 class Dimension(object):
@@ -525,18 +500,3 @@ def _maybe_auth_error(message):
         return True
     else:
         return False
-
-
-def _getitem_safe(dataset, key):
-    try:
-        return dataset._var.array.__getitem__(key)
-    except (AttributeError, KeyError,
-            ServerError, HTTPError):
-        # KeyError is important for python 3.3 and 3.4
-        if (isinstance(key, slice) and
-           key == slice(None, None, None)):
-            # A single dimension ellipsis was requested.
-            # Use netCDF4 convention:
-            return dataset[...]
-        else:
-            return dataset._var.__getitem__(key)

@@ -26,6 +26,8 @@ class MockErrors:
         raise self.errors[min(self.error_id - 1,
                               len(self.errors) - 1)]
 
+def mock_function(*args, **kwargs):
+    return
 
 def _message(e):
     try:
@@ -139,11 +141,12 @@ class TestDataset(unittest.TestCase):
 
         with Dataset('http://localhost:8000/',
                      application=self.app) as dataset:
-            variable = dataset.variables['temperature']
-            variable._var.array.__getitem__ = mock_httperror
-            variable._var.__getitem__ = mock_httperror
+            var = 'temperature'
+            dataset._pydap_dataset[var].array.__getitem__ = mock_httperror
+            dataset._pydap_dataset[var].__getitem__ = mock_httperror
+            dataset._assign_dataset = mock_function
             with self.assertRaises(ServerError) as e:
-                variable[...]
+                dataset.variables[var][...]
             assert str(e.exception.value) == '401 Test Error'
 
         mock_httperror = MockErrors([HTTPError('400 Test Error'),
@@ -151,11 +154,12 @@ class TestDataset(unittest.TestCase):
 
         with Dataset('http://localhost:8000/',
                      application=self.app) as dataset:
-            variable = dataset.variables['temperature']
-            variable._var.array.__getitem__ = mock_httperror
-            variable._var.__getitem__ = mock_httperror
+            var = 'temperature'
+            dataset._pydap_dataset[var].array.__getitem__ = mock_httperror
+            dataset._pydap_dataset[var].__getitem__ = mock_httperror
+            dataset._assign_dataset = mock_function
             with self.assertRaises(ServerError) as e:
-                variable[...]
+                dataset.variables[var][...]
             assert str(e.exception.value) == '500 Test Error'
 
     def test_variable_sslerror(self):
@@ -170,11 +174,12 @@ class TestDataset(unittest.TestCase):
         with Dataset('http://localhost:8000/',
                      application=self.app,
                      verify=False) as dataset:
-            variable = dataset.variables['temperature']
-            variable._var.array.__getitem__ = mock_sslerror
-            variable._var.__getitem__ = mock_sslerror
+            var = 'temperature'
+            dataset._pydap_dataset[var].array.__getitem__ = mock_sslerror
+            dataset._pydap_dataset[var].__getitem__ = mock_sslerror
+            dataset._assign_dataset = mock_function
             with self.assertRaises(ServerError) as e:
-                variable[...]
+                dataset.variables[var][...]
             assert str(e.exception.value) == '500 Test Error'
 
         mock_sslerror = MockErrors([HTTPError('400 Test Error'),
@@ -186,11 +191,11 @@ class TestDataset(unittest.TestCase):
                      application=self.app,
                      verify=False) as dataset:
             dataset._assign_dataset = mock_assignerror
-            variable = dataset.variables['temperature']
-            variable._var.array.__getitem__ = mock_sslerror
-            variable._var.__getitem__ = mock_sslerror
+            var = 'temperature'
+            dataset._pydap_dataset[var].array.__getitem__ = mock_sslerror
+            dataset._pydap_dataset[var].__getitem__ = mock_sslerror
             with self.assertRaises(SSLError) as e:
-                variable[...]
+                dataset.variables[var][...]
             assert str(e.exception) == "('SSL dataset Error',)"
 
     def test_dataset_filepath(self):
@@ -391,11 +396,12 @@ current shape = (4, 1, 1)
     def test_variable_string_dtype(self):
         with Dataset('http://localhost:8000/',
                      application=self.app) as dataset:
-            variable = dataset.variables['station']
+            var = 'station'
+            variable = dataset.variables[var]
             assert variable.dtype != 'S40'
-            assert 'DODS' not in variable._var.attributes
-            variable._var.attributes['DODS'] = {'dimName': 'string',
-                                                'string': 40}
+            assert 'DODS' not in dataset._pydap_dataset[var].attributes
+            dataset._pydap_dataset[var].attributes['DODS'] = {'dimName': 'string',
+                                                              'string': 40}
             assert variable.dtype == 'S40'
 
     def tearDown(self):
