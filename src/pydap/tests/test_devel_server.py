@@ -105,34 +105,26 @@ class TestCSVserver(unittest.TestCase):
                         raise HTTPError
 
     def test_verify_open_url(self):
-        """Test that timeout on open_url  raises the correct HTTPError"""
+        """Test that timeout on open_url  raises the correct SSLError"""
         with LocalTestServer(self.test_file, handler=CSVHandler,
                              ssl_context='adhoc') as server:
             url = ("https://0.0.0.0:%s/" % server.port +
                    os.path.basename(self.test_file))
-            if (sys.version_info >= (3, 0) and
-               sys.version_info < (3, 5)):
-                # verify option does not work for python 3.3 and 3.4:
-                try:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter('ignore')
-                        open_url(url, verify=False, session=requests.Session())
-                except (ssl.SSLError, requests.exceptions.SSLError):
-                        self.fail("SSLError should not be raised.")
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    open_url(url, verify=False, session=requests.Session())
+            except (ssl.SSLError, requests.exceptions.SSLError):
+                    self.fail("SSLError should not be raised.")
 
-                with self.assertRaises(requests.exceptions.SSLError):
-                    open_url(url, session=requests.Session())
+            with self.assertRaises(requests.exceptions.SSLError):
+                open_url(url, session=requests.Session())
+
+            if not (sys.version_info >= (3, 0) and
+                    sys.version_info < (3, 4, 4)):
+                # verify is disabled by default for python 3 before 3.4.4:
                 with self.assertRaises(ssl.SSLError):
                     open_url(url)
-            else:
-                try:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter('ignore')
-                        open_url(url, verify=False, session=requests.Session())
-                except (ssl.SSLError, requests.exceptions.SSLError):
-                        self.fail("SSLError should not be raised.")
-                with self.assertRaises(requests.exceptions.SSLError):
-                    open_url(url, session=requests.Session())
 
     def tearDown(self):
         # Remove test file:
