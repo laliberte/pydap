@@ -139,8 +139,9 @@ class BaseProxy(object):
             fragment)).rstrip('&')
 
         # download and unpack data
-        _logger.info("Fetching URL: %s" % url + " with SSL verify %s" % self.verify
-                     + " and timeout %s" % self.timeout + "s")
+        _logger.info("Fetching URL: %s" % url +
+                     " with SSL verify %s" % self.verify +
+                     " and timeout %s" % self.timeout + "s")
         r = GET(url, self.application, self.session, self.timeout, self.verify)
         raise_for_status(r)
         dds, data = r.body.split(b'\nData:\n', 1)
