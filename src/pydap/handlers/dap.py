@@ -32,10 +32,10 @@ from ..handlers.lib import ConstraintExpression, BaseHandler, IterData
 from ..parsers.dds import build_dataset
 from ..parsers.das import parse_das, add_attributes
 from ..parsers import parse_ce
-logger = logging.getLogger('pydap')
-logger.addHandler(logging.NullHandler())
 
 
+_logger = logging.getLogger(__name__)
+_logger.addHandler(logging.NullHandler())
 BLOCKSIZE = 512
 
 
@@ -139,7 +139,8 @@ class BaseProxy(object):
             fragment)).rstrip('&')
 
         # download and unpack data
-        logger.info("Fetching URL: %s" % url)
+        _logger.info("Fetching URL: %s" % url + " with SSL verify %s" % self.verify
+                     + " and timeout %s" % self.timeout + "s")
         r = GET(url, self.application, self.session, self.timeout, self.verify)
         raise_for_status(r)
         dds, data = r.body.split(b'\nData:\n', 1)

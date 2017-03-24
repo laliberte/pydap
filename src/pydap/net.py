@@ -69,7 +69,8 @@ def follow_redirect(url, application=None, session=None,
     It however makes sure that the request possesses the same cookies and
     headers as the passed session.
     """
-    req = create_request(url, session=session, verify=verify)
+    req = create_request(url, session=session, verify=verify,
+                         timeout=timeout)
     req.environ['webob.client.timeout'] = timeout
     return get_response(req, application, verify=verify)
 
@@ -105,7 +106,8 @@ def get_response(req, application, verify=True):
     return resp
 
 
-def create_request(url, session=None, verify=True):
+def create_request(url, session=None, verify=True,
+                   timeout=DEFAULT_TIMEOUT):
     """
     By default, create a blank request. If session
     is available, follow redirects.
@@ -128,7 +130,8 @@ def create_request(url, session=None, verify=True):
                                         category=category)
         try:
             with closing(session.head(url, allow_redirects=True,
-                                      verify=verify)) as head:
+                                      verify=verify,
+                                      timeout=timeout)) as head:
                 req = Request.blank(head.url)
 
                 # Get cookies from head:
