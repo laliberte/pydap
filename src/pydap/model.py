@@ -253,10 +253,6 @@ class BaseType(DapType):
         self.data = data
         self.dimensions = dimensions or ()
 
-        # these are set when not data is present (eg, when parsing a DDS)
-        self._dtype = None
-        self._shape = ()
-
     def __repr__(self):
         return '<%s with data %s>' % (type(self).__name__, repr(self.data))
 
