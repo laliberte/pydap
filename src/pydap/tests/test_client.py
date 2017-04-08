@@ -11,6 +11,8 @@ import unittest
 
 DODS = os.path.join(os.path.dirname(__file__), 'test.01.dods')
 DAS = os.path.join(os.path.dirname(__file__), 'test.01.das')
+DODS_STRUCT = os.path.join(os.path.dirname(__file__), 'test.02.dods')
+DAS_STRUCT = os.path.join(os.path.dirname(__file__), 'test.02.das')
 
 
 class TestOpenUrl(unittest.TestCase):
@@ -73,6 +75,12 @@ class TestOpenFile(unittest.TestCase):
             dataset.Facility['DrifterType'],
             "MetOcean WOCE/OCM")
 
+    def test_open_dods_das_struct(self):
+        """Open a file downloaded from the test server with the DAS."""
+        dataset = open_file(DODS_STRUCT, DAS_STRUCT)
+
+        print(dataset)
+        assert False
 
 class TestOpenDods(unittest.TestCase):
 

@@ -93,15 +93,21 @@ class DDSParser(SimpleParser):
         """Parse variable dimensions, returning tuples of dimensions/names."""
         shape = []
         names = []
+        dim_id = 0
         while not self.peek(';'):
             self.consume('\[')
             token = self.consume(name_regexp)
-            if self.peek('='):
-                names.append(token)
-                self.consume('=')
-                token = self.consume('\d+')
-            shape.append(int(token))
+            try:
+                shape.append(int(token))
+                names.append('dim' + str(dim_id))
+            except ValueError:
+                if self.peek('='):
+                    names.append(token)
+                    self.consume('=')
+                    token = self.consume('\d+')
+                shape.append(int(token))
             self.consume('\]')
+            dim_id += 0
         return tuple(shape), tuple(names)
 
     def sequence(self):
@@ -131,8 +137,16 @@ class DDSParser(SimpleParser):
             structure[var.name] = var
         self.consume('}')
 
-        structure.name = quote(self.consume('[^;]+'))
+        name = quote(self.consume('[^;\[]+'))
+        shape, dimensions = self.dimensions()
         self.consume(';')
+        structure.name = name
+        if shape:
+            dtype = np.dtype([(name, structure[name].dtype)
+                              for name in structure.keys()])
+            structure = StructureType(name, data)
+            data = DummyData(dtype, shape)
+            structure.data = data
 
         return structure
 
