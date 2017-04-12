@@ -191,10 +191,14 @@ class DapType(object):
 
     """
 
-    def __init__(self, name='nameless', attributes=None, **kwargs):
+    def __init__(self, name='nameless', data=None, dimensions=None,
+                 attributes=None, **kwargs):
         self.name = quote(name)
         self.attributes = attributes or {}
         self.attributes.update(kwargs)
+
+        self._data = data
+        self.dimensions = dimensions or ()
 
         # Set the id to the name.
         self._id = self.name
@@ -238,6 +242,24 @@ class DapType(object):
                 "'%s' object has no attribute '%s'"
                 % (type(self), attr))
 
+    @property
+    def dtype(self):
+        """Property that returns the data dtype."""
+        try:
+            return self.data.dtype
+        except AttributeError:
+            return np.dtype([(name, self[name].dtype)
+                             for name in self.children])
+
+    @property
+    def shape(self):
+        """Property that returns the data shape."""
+        try:
+            return self.data.shape
+        except AttributeError:
+            return [self[name].shape
+                    for name in self.children]
+
     def children(self):
         """Return iterator over children."""
         return ()
@@ -250,34 +272,14 @@ class BaseType(DapType):
     def __init__(self, name='nameless', data=None, dimensions=None,
                  attributes=None, **kwargs):
         super(BaseType, self).__init__(name, attributes, **kwargs)
-        self.data = data
-        self.dimensions = dimensions or ()
 
     def __repr__(self):
         return '<%s with data %s>' % (type(self).__name__, repr(self.data))
-
-    @property
-    def dtype(self):
-        """Property that returns the data dtype."""
-        return self.data.dtype
-
-    @property
-    def shape(self):
-        """Property that returns the data shape."""
-        return self.data.shape
 
     def reshape(self, *args):
         """Method that reshapes the data:"""
         self.data = self.data.reshape(*args)
         return self
-
-    @property
-    def ndim(self):
-        return len(self.shape)
-
-    @property
-    def size(self):
-        return int(np.prod(self.shape))
 
     def __copy__(self):
         """A lightweight copy of the variable.
@@ -316,9 +318,6 @@ class BaseType(DapType):
         out.data = self._get_data_index(index)
         return out
 
-    def __len__(self):
-        return len(self.data)
-
     def __iter__(self):
         if self._is_string_dtype:
             for item in self.data:
@@ -344,6 +343,17 @@ class BaseType(DapType):
         else:
             return self._data[index]
 
+    def __len__(self):
+        return len(self.data)
+
+    @property
+    def ndim(self):
+        return len(self.shape)
+
+    @property
+    def size(self):
+        return int(np.prod(self.shape))
+
     def _get_data(self):
         return self._data
 
@@ -361,7 +371,8 @@ class BaseType(DapType):
 class StructureType(DapType, Mapping):
     """A dict-like object holding other variables."""
 
-    def __init__(self, name='nameless', attributes=None, **kwargs):
+    def __init__(self, name='nameless', dimensions=(), attributes=None,
+                 **kwargs):
         super(StructureType, self).__init__(name, attributes, **kwargs)
 
         # allow some keys to be hidden:
@@ -461,11 +472,19 @@ class StructureType(DapType, Mapping):
             pass
 
     def _get_data(self):
-        return [var.data for var in self.children()]
+        if self._data:
+            # data was set at the Structure level:
+            return self._data
+        else:
+            # data was set at the Children level:
+            return [var.data for var in self.children()]
 
     def _set_data(self, data):
-        for col, var in zip(data, self.children()):
-            var.data = col
+        self._data = data
+        for child in self.children():
+            tokens = child.id[len(self.id)+1:].split('.')
+            child.data = reduce(operator.getitem, [data] + tokens)
+
     data = property(_get_data, _set_data)
 
     def __copy__(self):
@@ -603,17 +622,6 @@ class SequenceType(StructureType):
     def __init__(self, name='nameless', data=None, attributes=None, **kwargs):
         super(SequenceType, self).__init__(name, attributes, **kwargs)
         self._data = data
-
-    def _set_data(self, data):
-        self._data = data
-        for child in self.children():
-            tokens = child.id[len(self.id)+1:].split('.')
-            child.data = reduce(operator.getitem, [data] + tokens)
-
-    def _get_data(self):
-        return self._data
-
-    data = property(_get_data, _set_data)
 
     def iterdata(self):
         for line in self.data:
