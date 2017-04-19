@@ -470,7 +470,7 @@ def test_SequenceType_copy(sequence_example):
 @pytest.fixture()
 def gridtype_example():
     """Create a simple grid."""
-    example = GridType("example")
+    example = GridType("example", dimensions=("x", "y"))
     example["a"] = BaseType("a", data=np.arange(30*50).reshape(30, 50))
     example["x"] = BaseType("x", data=np.arange(30))
     example["y"] = BaseType("y", data=np.arange(50))

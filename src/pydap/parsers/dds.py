@@ -146,13 +146,14 @@ class DDSParser(SimpleParser):
 
     def grid(self):
         """Parse a DAP grid, returning a ``GridType``."""
-        grid = GridType('nameless')
         self.consume('grid')
         self.consume('{')
 
         self.consume('array')
         self.consume(':')
         array = self.base()
+
+        grid = GridType('nameless', dimensions=array.dimensions)
         grid[array.name] = array
 
         self.consume('maps')
