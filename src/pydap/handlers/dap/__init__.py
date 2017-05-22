@@ -26,8 +26,9 @@ from ...parsers.dds import build_dataset
 from ...parsers.das import parse_das, add_attributes
 from ...parsers import parse_ce
 from model import unpack_data, SequenceProxy, BaseProxy
-logger = logging.getLogger('pydap')
-logger.addHandler(logging.NullHandler())
+
+_logger = logging.getLogger(__name__)
+_logger.addHandler(logging.NullHandler())
 
 
 class DAPHandler(BaseHandler):
@@ -102,6 +103,6 @@ def dump():  # pragma: no cover
     xdr_stream = io.BytesIO(xdrdata)
     dds = dds.decode('ascii')
     dataset = build_dataset(dds)
-    data = unpack_data(xdr_stream, dataset)
+    dataset.data = unpack_data(xdr_stream, dataset)
 
-    pprint.pprint(data)
+    pprint.pprint(dataset.data)

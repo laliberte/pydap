@@ -167,8 +167,9 @@ But this is discouraged as this will be deprecated soon. The ``.iterdata()`` is
 therefore highly recommended.
 """
 
+import operator
 import copy
-from six.moves import map
+from six.moves import map, reduce
 from six import string_types
 import numpy as np
 from collections import OrderedDict, Mapping
@@ -327,8 +328,8 @@ class DapType(Mapping):
     def __copy__(self):
         """Return a lightweight copy of the Structure.
 
-        The method will return a new Structure with cloned children, but any
-        data object are not copied.
+        The method will return a new Structure with cloned children, but no
+        data object are copied.
 
         """
         out = type(self)(self.name, self.attributes.copy())
@@ -354,10 +355,31 @@ class DatasetType(DapType):
     """
     def __init__(self, name='nameless', attributes=None, **kwargs):
         super(DatasetType, self).__init__(name, attributes, **kwargs)
+        self._data = None
 
     def __repr__(self):
         return '<%s with children %s>' % (
             type(self).__name__, ', '.join(map(repr, self._visible_keys)))
+
+    def _get_data_from_children(self):
+        return [var.data for var in self.children()]
+
+    def _set_data_in_children(self, data):
+        for values, child in zip(data, self.children()):
+            child.data = values
+
+    def _get_data(self):
+        if self._data is not None:
+            return self._data
+        else:
+            # data was set at the Children level:
+            return self._get_data_from_children()
+
+    def _set_data(self, data):
+        self._data = data
+        self._set_data_in_children(data)
+    data = property(_get_data, _set_data)
+
 
 
 class StructureType(DatasetType):
@@ -371,41 +393,51 @@ class StructureType(DatasetType):
         # In StructureType, append parent id to children id:
         child.id = '%s.%s' % (self.id, child.name)
 
-    def _get_data(self):
-        # data was set at the Children level:
-        return [var.data for var in self.children()]
-
-    def _set_data(self, data):
-        for col, var in zip(data, self.children()):
-            var.data = col
-    data = property(_get_data, _set_data)
-
     @property
     def dtype(self):
         """Property that returns the data dtype."""
-        return np.dtype([(child.name, child.dtype)
-                         for child in self.children()])
+        if hasattr(self._data, 'dtype'):
+            return self._data.dtype
+        else:
+            return np.dtype([(child.name, child.dtype)
+                             for child in self.children()])
 
     @property
     def shape(self):
         """Property that returns the data shape."""
-        return [child.shape
-                for child in self.children()]
+        if hasattr(self._data, 'shape'):
+            return self._data.shape
+        else:
+            return [child.shape for child in self.children()]
+
+    def __array__(self):
+        if hasattr(self._data, '__array__'):
+            return self._data.__array__
+        else:
+            return [data.__array__ for data in self.data]
 
     def __copy__(self):
         """Return a lightweight copy of the Structure.
 
-        The method will return a new Sequence with cloned children, but any
-        data object are not copied.
+        The method will return a new Structure with cloned children, but for
+        data objects only a view is copied.
 
         """
-        out = type(self)(self.name, self.dimensions, self.attributes.copy())
-        out.id = self.id
-
-        # Clone children too.
-        for child in self.children():
-            out[child.name] = copy.copy(child)
+        out = DapType.__copy__(self)
         out.data = self.data
+        return out
+
+    def __getitem__(self, key):
+        try:
+            return DatasetType.__getitem__(self, key)
+        except KeyError:
+            return self._getitem_slice(key)
+
+    def _getitem_slice(self, key):
+        if not isinstance(key, tuple):
+            key = (key,)
+        out = DapType.__copy__(self)
+        out.data = self.data[key]
         return out
 
 
@@ -501,6 +533,13 @@ class SequenceType(StructureType):
     def __init__(self, name='nameless', data=None, attributes=None, **kwargs):
         super(SequenceType, self).__init__(name, data, attributes, **kwargs)
 
+    def _set_data_in_children(self, data):
+        # In a SequenceType, it is assumed that
+        # the data is in a mapping:
+        for child in self.children():
+            tokens = child.id[len(self.id)+1:].split('.')
+            child.data = reduce(operator.getitem, [data] + tokens)
+
     def __iter__(self):
         # This method should be removed in Pydap 3.4
         warnings.warn('Starting with Pydap 3.4 '
@@ -545,14 +584,6 @@ class SequenceType(StructureType):
         # This method should be removed in Pydap 3.4
         return (key in self._visible_keys)
 
-    def __getitem__(self, key):
-        try:
-            return StructureType.__getitem__(self, key)
-        except KeyError:
-            out = copy.copy(self)
-            out.data = self.data[key]
-            return out
-
 
 class GridType(StructureType):
 
@@ -576,19 +607,12 @@ class GridType(StructureType):
 
     def __getitem__(self, key):
         try:
-            return StructureType.__getitem__(self, key)
+            return DatasetType.__getitem__(self, key)
         except KeyError:
             if not self.output_grid:
                 return self.array[key]
-
-            if not isinstance(key, tuple):
-                key = (key,)
-
-            out = copy.copy(self)
-            out.data = self.data[key]
-            #for var, slice_ in zip(out.children(), [key] + list(key)):
-            #    var.data = self[var.name].data[slice_]
-            return out
+            else:
+                return self._getitem_slice(key)
 
     # Comparisons are passed to the data.
     def __eq__(self, other):
@@ -640,7 +664,7 @@ class GridType(StructureType):
         return next(self.children())
 
     def __array__(self):
-        return self.array.data
+        return self.array[...].data
 
     @property
     def maps(self):
@@ -662,7 +686,8 @@ class BaseType(GridType):
                  attributes=None, **kwargs):
         super(BaseType, self).__init__(name, data, attributes, **kwargs)
         self.data = data
-        self.dimensions = dimensions or ()
+        self.dimensions = tuple(dimensions) or ()
+        self.maps = OrderedDict()
 
     def __repr__(self):
         return '<%s with data %s>' % (type(self).__name__, repr(self.data))
@@ -678,7 +703,10 @@ class BaseType(GridType):
     # Implement the sequence and iter protocols.
     def __getitem__(self, key):
         out = copy.copy(self)
-        out.data = self._get_data_key(key)
+        if out._is_string_dtype:
+            out.data = np.vectorize(decode_np_strings)(out.data[key])
+        else:
+            out.data = out.data[key]
         return out
 
     def __iter__(self):
@@ -703,29 +731,11 @@ class BaseType(GridType):
             # ``.dtype`` and ``.shape``
             # methods will fail.
             self._data = np.array(data)
-
     data = property(_get_data, _set_data)
 
     @property
     def _is_string_dtype(self):
         return hasattr(self.data, 'dtype') and self.data.dtype.char == 'S'
 
-    def _get_data_key(self, key=Ellipsis):
-        if self._is_string_dtype:
-            return np.vectorize(decode_np_strings)(self.data[key])
-        else:
-            return self.data[key]
-
-    @property
-    def dtype(self):
-        return self.data.dtype
-
-    @property
-    def shape(self):
-        return self.data.shape
-
     def array(self):
         return self
-
-    def __array__(self):
-        return self._get_data_key()
