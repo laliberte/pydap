@@ -19,13 +19,13 @@ from six.moves.urllib.parse import urlsplit, urlunsplit
 from ...model import (BaseType,
                       SequenceType,
                       GridType)
+from .model import unpack_data, SequenceProxy, BaseProxy
 from ...net import GET, raise_for_status
 from ...lib import fix_slice, walk
 from ..lib import BaseHandler
 from ...parsers.dds import build_dataset
 from ...parsers.das import parse_das, add_attributes
 from ...parsers import parse_ce
-from model import unpack_data, SequenceProxy, BaseProxy
 
 _logger = logging.getLogger(__name__)
 _logger.addHandler(logging.NullHandler())
