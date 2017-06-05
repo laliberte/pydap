@@ -13,6 +13,7 @@ addons:
       - netcdf-bin
       - libnetcdf-dev
 install:
+    - pip install cython
     - pip install -e .[testing,functions,server,tests]
 
 script:
