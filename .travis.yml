@@ -13,7 +13,8 @@ addons:
       - netcdf-bin
       - libnetcdf-dev
 install:
-    # Manually installing cython for netcdf4. Might not be required in the future:
+    # Manually installing cython for netcdf4. Might not be required in the future.
+    # Only necessary for 2.7 and 3.4.
     - pip install cython
     - pip install -e .[testing,functions,server,tests]
 
