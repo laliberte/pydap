@@ -82,7 +82,7 @@ SQL
 
 The SQL handler reads data from a relation database, as the name suggests. It works by reading a file with the extension ``.sql``, defining the connection to the database and other metadata using either YAML or INI syntax. Below is an example that reads data from a SQLite database:
 
-.. code-block:: ini
+.. code-block:: yaml
 
     # please read http://groups.google.com/group/pydap/browse_thread/thread/c7f5c569d661f7f9 before
     # setting your password on the DSN

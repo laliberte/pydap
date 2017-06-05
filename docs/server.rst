@@ -43,8 +43,8 @@ Pydap follows the `WSGI specification <https://www.fullstackpython.com/wsgi-serv
     application = DapServer('/path/to/my/data/files')
 
 
-Flask
------
+Using Flask
+-----------
 
 The `Flask <http://flask.pocoo.org/>`_ framework simply requires a couple more function calls to spin up an application server. A simple server would looks something like this (your mileage may vary):
 
@@ -58,8 +58,8 @@ The `Flask <http://flask.pocoo.org/>`_ framework simply requires a couple more f
     app.wsgi_app = application
     app.run('0.0.0.0', 8000)
 
-Apache
-------
+Using Apache
+------------
 
 For a robust deployment you can run Pydap with Apache, using `mod_wsgi <http://modwsgi.org/>`_. After `installing mod_wsgi <http://code.google.com/p/modwsgi/wiki/InstallationInstructions>`_, create a sandbox in a directory *outside* your DocumentRoot, say ``/var/www/pydap/``, using `a virtual environment <https://docs.python.org/3/library/venv.html>`_:
 
@@ -138,10 +138,10 @@ This is the file I use for the `test.pydap.org <http://test.pydap.org/>`_ virtua
 You can find more information on the `mod_wsgi configuration guide <http://code.google.com/p/modwsgi/wiki/QuickConfigurationGuide>`_. Just remember that Pydap is a WSGI application like any other else, so any information on WSGI applications applies to it as well.
 
 
-uWSGI
------
+Using uWSGI
+-----------
 
-`uWSGI <http://projects.unbit.it/uwsgi/>`_ is a "fast, self-healing and developer/sysadmin-friendly application container server coded in pure C" that can run Pydap. This is the recommended way to run Pydap if you don't have to integrate it with other web applications. Simply install uWSGI, follow the instructions in the last section in order to create a virtualenv and Pydap installation:
+`uWSGI <https://uwsgi-docs.readthedocs.io/en/latest/>`_ is a "fast, self-healing and developer/sysadmin-friendly application container server coded in pure C" that can run Pydap. This is the recommended way to run Pydap if you don't have to integrate it with other web applications. Simply install uWSGI, follow the instructions in the last section in order to create a virtualenv and Pydap installation:
 
 .. code-block:: bash
 
